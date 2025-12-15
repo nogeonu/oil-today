@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LPG - Oil Today®</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 40px;
+            background-color: #ffffff;
+            min-height: 100vh;
+            position: relative;
+        }
+
+        .nav {
+            position: fixed;
+            top: 40px;
+            left: 40px;
+        }
+
+        .nav a {
+            text-decoration: none;
+            color: #000;
+            font-size: 1.2rem;
+            font-weight: bold;
+            transition: color 0.3s ease;
+        }
+
+        .nav a:hover {
+            color: #FF4500;
+        }
+
+        .price-container {
+            margin-top: 150px;
+            max-width: 1200px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .fuel-title {
+            font-size: 8rem;
+            font-weight: bold;
+            margin-bottom: 60px;
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            margin-bottom: 60px;
+            background: #f8f8f8;
+            padding: 30px;
+            border-radius: 15px;
+        }
+
+        .price-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+        }
+
+        .price-card {
+            background: #f8f8f8;
+            padding: 30px;
+            border-radius: 15px;
+            transition: transform 0.3s ease;
+        }
+
+        .price-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .region {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .price {
+            font-size: 4rem;
+            color: #FF4500;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .change {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .increase {
+            color: #FF4500;
+        }
+
+        .decrease {
+            color: #000;
+        }
+
+        .map-container {
+            margin-top: 60px;
+            background: #f8f8f8;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 1200px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .map-title {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        #map {
+            width: 100%;
+            height: 500px;
+            border-radius: 10px;
+            background-color: #eee;
+        }
+
+        .bottom-content {
+            position: fixed;
+            bottom: 40px;
+            right: 40px;
+            text-align: right;
+        }
+
+        .brand {
+            color: #FF4500;
+            font-size: 3rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .made-in {
+            font-size: 0.8rem;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .nav a {
+                font-size: 1.5rem;
+            }
+            
+            .fuel-title {
+                font-size: 2.5rem;
+            }
+
+            .chart-container {
+                height: 300px;
+                padding: 15px;
+                margin-bottom: 30px;
+            }
+
+            .price-card {
+                padding: 20px;
+            }
+
+            .region {
+                font-size: 1.5rem;
+            }
+
+            .price {
+                font-size: 2rem;
+            }
+
+            .change {
+                font-size: 1.2rem;
+            }
+            
+            .brand {
+                font-size: 2rem;
+            }
+
+            .map-title {
+                font-size: 1.8rem;
+            }
+
+            #map {
+                height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <a href="../index.html">HOME</a>
+    </nav>
+
+    <div class="price-container">
+        <div class="fuel-title">LPG</div>
+        
+        <div class="chart-container">
+            <canvas id="priceChart"></canvas>
+        </div>
+
+        <div class="price-grid" id="priceGrid">
+            <!-- 데이터는 JavaScript로 동적 생성됨 -->
+        </div>
+    </div>
+
+    <div class="map-container">
+        <div class="map-title">주변 주유소 찾기</div>
+        <div id="map"></div>
+    </div>
+
+    <div class="bottom-content">
+        <div class="brand">Oil Today®</div>
+        <div class="made-in">Made in Korea</div>
+    </div>
+
+    <script>
+        async function loadPriceData() {
+    try {
+        console.log('Fetching data...');
+        const response = await fetch('../api/data/oil_prices_sido.json');
+        const data = await response.json();
+        
+        // LPG(K015) 데이터만 필터링
+        const lpgData = data.filter(item => item.PRODCD === "K015");
+        
+        // 데이터프레임을 객체로 변환
+        const priceData = {};
+        lpgData.forEach(item => {
+            priceData[item.SIDONM] = {
+                price: parseFloat(item.PRICE),
+                diff: parseFloat(item.DIFF)
+            };
+        });
+
+        // 주요 지역 데이터 표시
+        const mainRegions = ['전국 평균','서울', '경기', '인천','대전','대구','부산','울산','광주','제주'];
+        const priceGrid = document.getElementById('priceGrid');
+        priceGrid.innerHTML = '';
+
+        // 전국 평균 계산
+        const avgPrice = Object.values(priceData).reduce((sum, item) => sum + item.price, 0) / Object.keys(priceData).length;
+        const avgDiff = Object.values(priceData).reduce((sum, item) => sum + item.diff, 0) / Object.keys(priceData).length;
+
+        mainRegions.forEach(region => {
+            const price = region === '전국 평균' ? avgPrice : priceData[region].price;
+            const diff = region === '전국 평균' ? avgDiff : priceData[region].diff;
+            
+            const card = document.createElement('div');
+            card.className = 'price-card';
+            card.innerHTML = `
+                <div class="region">${region}</div>
+                <div class="price">${price.toFixed(1)}원</div>
+                <div class="change ${diff >= 0 ? 'increase' : 'decrease'}">
+                    ${diff >= 0 ? '▲' : '▼'} ${Math.abs(diff).toFixed(1)}원
+                </div>
+            `;
+            priceGrid.appendChild(card);
+        });
+
+        // 차트 업데이트
+        const ctx = document.getElementById('priceChart').getContext('2d');
+        const priceChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Object.keys(priceData),
+                datasets: [{
+                    label: '지역별 LPG 가격',
+                    data: Object.values(priceData).map(item => item.price),
+                    borderColor: '#FF4500',
+                    tension: 0.4,
+                    borderWidth: 3,
+                    pointRadius: 6,
+                    pointBackgroundColor: '#FF4500'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        grid: {
+                            color: '#f0f0f0'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Error details:', error);
+    }
+}
+
+// 페이지 로드 시 실행
+document.addEventListener('DOMContentLoaded', loadPriceData);
+
+        // 위치 정보 가져오기
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(initMap, handleLocationError);
+        } else {
+            console.log("위치 정보를 사용할 수 없습니다.");
+        }
+
+        // Google Maps 초기화 함수
+        function initMap(position) {
+            const pos = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+            };
+
+            const map = new google.maps.Map(document.getElementById("map"), {
+                center: pos,
+                zoom: 15,
+                styles: [
+                    {
+                        featureType: "poi.business",
+                        stylers: [{ visibility: "off" }],
+                    }
+                ]
+            });
+
+            const infoWindow = new google.maps.InfoWindow();
+
+            // 현재 위치 마커
+            new google.maps.Marker({
+                position: pos,
+                map: map,
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 8,
+                    fillColor: "#FF4500",
+                    fillOpacity: 1,
+                    strokeWeight: 2,
+                    strokeColor: "#FFFFFF",
+                },
+                title: "현재 위치"
+            });
+
+            // 주변 주유소 검색
+            const service = new google.maps.places.PlacesService(map);
+            service.nearbySearch(
+                {
+                    location: pos,
+                    radius: 2000,
+                    type: ["gas_station"]
+                },
+                (results, status) => {
+                    if (status === google.maps.places.PlacesServiceStatus.OK) {
+                        results.forEach(place => {
+                            const marker = new google.maps.Marker({
+                                map: map,
+                                position: place.geometry.location,
+                                icon: {
+                                    url: "https://maps.google.com/mapfiles/ms/icons/gas.png",
+                                    scaledSize: new google.maps.Size(32, 32)
+                                }
+                            });
+
+                            google.maps.event.addListener(marker, "click", () => {
+                                const geocoder = new google.maps.Geocoder();
+                                geocoder.geocode({ location: place.geometry.location }, (results, status) => {
+                                    if (status === "OK") {
+                                        const address = results[0].formatted_address;
+                                        infoWindow.setContent(`
+                                            <div style="padding: 8px;">
+                                                <strong>${place.name}</strong><br>
+                                                ${address}
+                                            </div>
+                                        `);
+                                        infoWindow.open(map, marker);
+                                    }
+                                });
+                            });
+                        });
+                    }
+                }
+            );
+        }
+
+        function handleLocationError(error) {
+            console.log("위치 정보를 가져올 수 없습니다:", error);
+            // 기본 위치(서울)로 지도 초기화
+            initMap({ coords: { latitude: 37.5665, longitude: 126.9780 } });
+        }
+    </script>
+
+    <!-- Google Maps API -->
+    <script async defer
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDwUxEirWwl3V9ZyL9HS3CP-MPndbXmtp8&libraries=places">
+    </script>
+</body>
+</html>

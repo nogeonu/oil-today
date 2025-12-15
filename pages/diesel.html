@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diesel - Oil Today®</title>
+    <!-- 스크립트 순서 변경 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script defer type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=8oirn882a3&submodules=places"></script>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 40px;
+            background-color: #ffffff;
+            min-height: 100vh;
+            position: relative;
+        }
+
+        .nav {
+            position: fixed;
+            top: 40px;
+            left: 40px;
+        }
+
+        .nav a {
+            text-decoration: none;
+            color: #000;
+            font-size: 1.2rem;
+            font-weight: bold;
+            transition: color 0.3s ease;
+        }
+
+        .nav a:hover {
+            color: #FF4500;
+        }
+
+        .price-container {
+            margin-top: 150px;
+            max-width: 1200px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .fuel-title {
+            font-size: 8rem;
+            font-weight: bold;
+            margin-bottom: 60px;
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            margin-bottom: 60px;
+            background: #f8f8f8;
+            padding: 30px;
+            border-radius: 15px;
+        }
+
+        .price-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+        }
+
+        .price-card {
+            background: #f8f8f8;
+            padding: 30px;
+            border-radius: 15px;
+            transition: transform 0.3s ease;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .price-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .region {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .price {
+            font-size: 4rem;
+            color: #FF4500;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .change {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .increase {
+            color: #FF4500;
+        }
+
+        .decrease {
+            color: #000;
+        }
+
+        .map-container {
+            margin-top: 60px;
+            background: #f8f8f8;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 1200px;
+            margin-left: auto;
+            margin-right: auto;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        .map-title {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        #map {
+            width: 100%;
+            height: 500px;
+            border-radius: 10px;
+            background-color: #eee;
+        }
+
+        .bottom-content {
+            position: fixed;
+            bottom: 40px;
+            right: 40px;
+            text-align: right;
+        }
+
+        .brand {
+            color: #FF4500;
+            font-size: 3rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .made-in {
+            font-size: 0.8rem;
+            margin-top: 10px;
+        }
+
+        .info-window {
+            padding: 15px;
+            min-width: 200px;
+        }
+
+        .info-window h3 {
+            margin: 0 0 10px 0;
+            color: #FF4500;
+        }
+
+        .info-window p {
+            margin: 5px 0;
+            font-size: 0.9rem;
+        }
+
+        .info-window .price-info {
+            font-weight: bold;
+            color: #FF4500;
+            font-size: 1.1rem;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 20px;
+            }
+            
+            .nav a {
+                font-size: 1.5rem;
+            }
+            
+            .fuel-title {
+                font-size: 2.5rem;
+            }
+
+            .chart-container {
+                height: 300px;
+                padding: 15px;
+                margin-bottom: 30px;
+            }
+
+            .price-card {
+                padding: 20px;
+            }
+
+            .region {
+                font-size: 1.5rem;
+            }
+
+            .price {
+                font-size: 2rem;
+            }
+
+            .change {
+                font-size: 1.2rem;
+            }
+            
+            .brand {
+                font-size: 2rem;
+            }
+
+            .map-title {
+                font-size: 1.8rem;
+            }
+
+            #map {
+                height: 300px;
+            }
+        }
+    </style>
+</head>
+
+<body></body>
+    <nav class="nav">
+        <a href="../index.html">HOME</a>
+    </nav>
+
+    <div class="price-container">
+        <div class="fuel-title">Diesel</div>
+        
+        <div class="chart-container">
+            <canvas id="priceChart"></canvas>
+        </div>
+
+        <div class="price-grid" id="priceGrid">
+            <!-- 데이터는 JavaScript로 동적 생성됨 -->
+        </div>
+    </div>
+
+    <div class="map-container">
+        <div class="map-title">주변 주유소 찾기</div>
+        <div id="map"></div>
+    </div>
+
+    <div class="bottom-content">
+        <div class="brand">Oil Today®</div>
+        <div class="made-in">Made in Korea</div>
+    </div>
+
+    <script>
+        async function loadPriceData() {
+            try {
+                console.log('Fetching data...');
+                const response = await fetch('../api/data/oil_prices_sido.json');
+                const data = await response.json();
+                
+                const dieselData = data.filter(item => item.PRODCD === "D047");
+                
+                const priceData = {};
+                dieselData.forEach(item => {
+                    priceData[item.SIDONM] = {
+                        price: parseFloat(item.PRICE),
+                        diff: parseFloat(item.DIFF)
+                    };
+                });
+
+                const mainRegions = ['전국 평균','서울', '경기', '인천','대전','대구','부산','울산','광주','제주'];
+                const priceGrid = document.getElementById('priceGrid');
+                priceGrid.innerHTML = '';
+
+                const avgPrice = Object.values(priceData).reduce((sum, item) => sum + item.price, 0) / Object.keys(priceData).length;
+                const avgDiff = Object.values(priceData).reduce((sum, item) => sum + item.diff, 0) / Object.keys(priceData).length;
+
+                mainRegions.forEach(region => {
+                    const price = region === '전국 평균' ? avgPrice : priceData[region].price;
+                    const diff = region === '전국 평균' ? avgDiff : priceData[region].diff;
+                    
+                    const card = document.createElement('div');
+                    card.className = 'price-card';
+                    card.innerHTML = `
+                        <div class="region">${region}</div>
+                        <div class="price">${price.toFixed(1)}원</div>
+                        <div class="change ${diff >= 0 ? 'increase' : 'decrease'}">
+                            ${diff >= 0 ? '▲' : '▼'} ${Math.abs(diff).toFixed(1)}원
+                        </div>
+                    `;
+                    priceGrid.appendChild(card);
+                });
+
+                const ctx = document.getElementById('priceChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: ['1월', '2월', '3월', '4월', '5월', '6월', '7월'],
+                        datasets: [{
+                            label: '전국 평균 가격',
+                            data: [1650, 1630, 1645, 1622, 1635, 1628, 1622],
+                            borderColor: '#FF4500',
+                            tension: 0.4,
+                            borderWidth: 3,
+                            pointRadius: 6,
+                            pointBackgroundColor: '#FF4500'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                grid: {
+                                    color: '#f0f0f0'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Error details:', error);
+            }
+        }
+
+        // 위치 정보 가져오기
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(initMap, handleLocationError);
+        } else {
+            console.log("위치 정보를 사용할 수 없습니다.");
+        }
+
+        function initMap(position) {
+            const pos = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+            };
+
+            const mapOptions = {
+                center: new naver.maps.LatLng(pos.lat, pos.lng),
+                zoom: 14,
+                mapTypeControl: true
+            };
+
+            const map = new naver.maps.Map('map', mapOptions);
+
+            // 현재 위치 마커
+            new naver.maps.Marker({
+                position: new naver.maps.LatLng(pos.lat, pos.lng),
+                map: map,
+                icon: {
+                    content: '<div style="background-color: #FF4500; width: 15px; height: 15px; border-radius: 50%; border: 2px solid white;"></div>',
+                    anchor: new naver.maps.Point(8, 8)
+                }
+            });
+
+            // 주변 주유소 검색
+            searchNearbyGasStations(pos, map);
+        }
+
+        async function searchNearbyGasStations(pos, map) {
+            try {
+                const response = await fetch(`http://localhost:5000/api/gas-stations?lat=${pos.lat}&lng=${pos.lng}`);
+                const data = await response.json();
+                
+                if (data && data.RESULT && data.RESULT.oil) {
+                    const stations = data.RESULT.oil;
+                    
+                    // 기존 순위 목록 제거
+                    const existingRankList = document.querySelector('.rank-list');
+                    if (existingRankList) {
+                        existingRankList.remove();
+                    }
+
+                    // 순위 목록 생성
+                    const rankListDiv = document.createElement('div');
+                    rankListDiv.className = 'rank-list';
+                    rankListDiv.style.cssText = `
+                        position: absolute;
+                        top: 10px;
+                        right: 10px;
+                        background: white;
+                        padding: 15px;
+                        border-radius: 10px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                        z-index: 1000;
+                        max-width: 300px;
+                    `;
+
+                    const rankStyles = [
+                        { color: '#FF4500', size: '24px' },
+                        { color: '#FF6B00', size: '22px' },
+                        { color: '#FF8C00', size: '20px' },
+                        { color: '#FFA500', size: '18px' },
+                        { color: '#FFB700', size: '16px' }
+                    ];
+
+                    stations.slice(0, 5).forEach((station, index) => {
+                        const marker = new naver.maps.Marker({
+                            position: new naver.maps.LatLng(station.GIS_Y_COORD, station.GIS_X_COORD),
+                            map: map,
+                            icon: {
+                                content: `
+                                    <div style="
+                                        background-color: ${rankStyles[index].color};
+                                        color: white;
+                                        font-weight: bold;
+                                        font-size: ${rankStyles[index].size};
+                                        width: 30px;
+                                        height: 30px;
+                                        line-height: 30px;
+                                        text-align: center;
+                                        border-radius: 50%;
+                                        border: 2px solid white;
+                                        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                                    ">${index + 1}</div>
+                                `,
+                                anchor: new naver.maps.Point(15, 15)
+                            }
+                        });
+
+                        const infoWindow = new naver.maps.InfoWindow({
+                            content: `
+                                <div class="info-window">
+                                    <h3>${index + 1}위: ${station.OS_NM}</h3>
+                                    <p>${station.NEW_ADR}</p>
+                                    <p class="price-info">가격: ${station.PRICE}원</p>
+                                </div>
+                            `
+                        });
+
+                        naver.maps.Event.addListener(marker, 'click', () => {
+                            if (infoWindow.getMap()) {
+                                infoWindow.close();
+                            } else {
+                                infoWindow.open(map, marker);
+                            }
+                        });
+
+                        rankListDiv.innerHTML += `
+                            <div style="
+                                margin-bottom: 10px;
+                                padding: 10px;
+                                border-radius: 5px;
+                                background: ${index === 0 ? '#FFF3F0' : 'white'};
+                                border: 1px solid ${rankStyles[index].color};
+                            ">
+                                <strong style="color: ${rankStyles[index].color}">${index + 1}위</strong>
+                                <div style="font-weight: bold;">${station.OS_NM}</div>
+                                <div style="font-size: 0.8em; color: #666;">${station.NEW_ADR}</div>
+                                <div style="color: #FF4500;">가격: ${station.PRICE}원</div>
+                            </div>
+                        `;
+                    });
+
+                    document.querySelector('.map-container').appendChild(rankListDiv);
+                }
+            } catch (error) {
+                console.error('주유소 검색 실패:', error);
+            }
+        }
+
+        function handleLocationError(error) {
+            console.log("위치 정보를 가져올 수 없습니다:", error);
+            initMap({ coords: { latitude: 37.5665, longitude: 126.9780 } });
+        }
+
+        document.addEventListener('DOMContentLoaded', loadPriceData);
+    </script>
+</body>
+</html>
